@@ -1,10 +1,6 @@
-# rex_repo_template
-REDAXO AddOn english readme
+# REDAXO VideoPreview
 
-please use in your classes a namespace as
+## Work in progress / experimental state
 
-```
-namespace FriendsOfRedaxo\[AddOnNameWithoutSpacesAndAsCamelCase]
-```
+AddOn will generate animated webp video previews 
 
-in order to use non deprecated features please don't use PlugIns anymore
