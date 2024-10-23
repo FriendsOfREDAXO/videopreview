@@ -2,5 +2,6 @@
 
 ## Work in progress / experimental state
 
-AddOn will generate animated webp video previews 
+AddOn will generate animated webp or mp4 video previews 
 
+current: animated webp for poster
