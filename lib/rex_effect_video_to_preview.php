@@ -1,9 +1,5 @@
 <?php
 
-/**
- * REDAXO Media Manager Effekt
- * Konvertiert Videos in animierte WebP oder MP4 Vorschauen 
- */
 class rex_effect_video_to_preview extends rex_effect_abstract
 {
     private const COMPRESSION_LEVELS = [
@@ -39,7 +35,6 @@ class rex_effect_video_to_preview extends rex_effect_abstract
 
             $params = $this->validateAndGetParams();
 
-            // Debug logging für Format
             rex_logger::factory()->log('media_manager', sprintf(
                 'Debug Format Params: output_format=%s, raw_param=%s', 
                 $params['format'],
@@ -57,14 +52,12 @@ class rex_effect_video_to_preview extends rex_effect_abstract
                 $params['position']
             );
 
-            // Setze Extension basierend auf Format
             $isMP4 = trim(strtolower($params['format'])) === 'mp4';
             $extension = $isMP4 ? 'mp4' : 'webp';
             
             $outputFile = rex_path::addonCache('media_manager', 
                 'media_manager__video_preview_' . md5($inputFile) . '.' . $extension);
 
-            // Debug logging für Konvertierung
             rex_logger::factory()->log('media_manager', sprintf(
                 'Konvertiere zu: format=%s, extension=%s, isMP4=%s', 
                 $params['format'],
@@ -104,11 +97,9 @@ class rex_effect_video_to_preview extends rex_effect_abstract
             $this->media->refreshImageDimensions();
             $this->media->setFormat($extension);
             
-            // Setze korrekten Content-Type basierend auf Format
             $contentType = $isMP4 ? 'video/mp4' : 'image/webp';
             $this->media->setHeader('Content-Type', $contentType);
             
-            // Debug logging für Output
             rex_logger::factory()->log('media_manager', sprintf(
                 'Output Details: extension=%s, contentType=%s', 
                 $extension,
@@ -184,11 +175,11 @@ class rex_effect_video_to_preview extends rex_effect_abstract
     private function getQualityForCompression(int $compression): int 
     {
         $qualityMap = [
-            1 => 95, // Minimal
-            2 => 85, // Niedrig
-            3 => 75, // Standard
-            4 => 65, // Hoch
-            5 => 55  // Maximal
+            1 => 95,
+            2 => 85,
+            3 => 75,
+            4 => 65,
+            5 => 55
         ];
         
         return $qualityMap[$compression] ?? 75;
@@ -212,17 +203,16 @@ class rex_effect_video_to_preview extends rex_effect_abstract
         $filters[] = sprintf('fps=%d', $fps);
         $filters[] = 'crop=trunc(iw/2)*2:trunc(ih/2)*2';
 
-        $crf = min(28, 18 + ($compression * 2)); // CRF 18-28 based on compression level
-
         $cmd = sprintf(
             'ffmpeg -y ' .
             '-ss %f -t %f '.
             '-i %s '.
             '-vf "%s" '.
-            '-c:v libx264 '.
-            '-preset medium '.
-            '-crf %d '.
-            '-profile:v main '.
+            '-c:v h264 '.
+            '-preset ultrafast '.
+            '-crf 23 '.
+            '-profile:v baseline '.
+            '-pix_fmt yuv420p '.
             '-movflags +faststart '.
             '-an '.
             '-threads 4 '.
@@ -231,13 +221,11 @@ class rex_effect_video_to_preview extends rex_effect_abstract
             $length,
             escapeshellarg($input),
             implode(',', $filters),
-            $crf,
             escapeshellarg($output)
         );
 
         $this->executeCommand($cmd);
         
-        // Debug logging für MP4 Konvertierung
         rex_logger::factory()->log('media_manager', sprintf(
             'MP4 Konvertierung: cmd=%s', 
             $cmd
@@ -292,7 +280,6 @@ class rex_effect_video_to_preview extends rex_effect_abstract
 
         $this->executeCommand($cmd);
         
-        // Debug logging für WebP Konvertierung
         rex_logger::factory()->log('media_manager', sprintf(
             'WebP Konvertierung: cmd=%s', 
             $cmd
@@ -309,7 +296,6 @@ class rex_effect_video_to_preview extends rex_effect_abstract
             );
         }
         
-        // Debug logging für Kommando Ausführung
         rex_logger::factory()->log('media_manager', sprintf(
             'Kommando Ausführung: returnCode=%d, output=%s', 
             $returnCode,
