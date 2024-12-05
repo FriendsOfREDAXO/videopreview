@@ -3,7 +3,6 @@
 /**
  * REDAXO Media Manager Effekt
  * Konvertiert Videos in animierte WebP oder MP4 Vorschauen 
- * mit optimierter Textdarstellung und korrekter Positionierung
  */
 class rex_effect_video_to_preview extends rex_effect_abstract
 {
@@ -39,35 +38,41 @@ class rex_effect_video_to_preview extends rex_effect_abstract
             }
 
             $params = $this->validateAndGetParams();
+
+            // Debug logging für Format
+            rex_logger::factory()->log('media_manager', sprintf(
+                'Debug Format Params: output_format=%s, raw_param=%s', 
+                $params['format'],
+                $this->params['output_format'] ?? 'nicht gesetzt'
+            ));
             
             $duration = $this->getVideoDuration($inputFile);
             if ($duration <= 0) {
                 throw new rex_exception('Videolänge konnte nicht ermittelt werden');
             }
             
-            rex_logger::factory()->log('media_manager', sprintf(
-                'Video Info: Länge=%f, Position=%s, SnippetLänge=%f', 
-                $duration, 
-                $params['position'], 
-                $params['snippetLength']
-            ));
-            
             $startPosition = $this->calculateStartPosition(
                 $duration,
                 $params['snippetLength'],
                 $params['position']
             );
-            
-            rex_logger::factory()->log('media_manager', sprintf(
-                'Berechnete Startposition: %f Sekunden', 
-                $startPosition
-            ));
 
-            $extension = $params['format'] === 'mp4' ? 'mp4' : 'webp';
+            // Setze Extension basierend auf Format
+            $isMP4 = trim(strtolower($params['format'])) === 'mp4';
+            $extension = $isMP4 ? 'mp4' : 'webp';
+            
             $outputFile = rex_path::addonCache('media_manager', 
                 'media_manager__video_preview_' . md5($inputFile) . '.' . $extension);
 
-            if ($params['format'] === 'mp4') {
+            // Debug logging für Konvertierung
+            rex_logger::factory()->log('media_manager', sprintf(
+                'Konvertiere zu: format=%s, extension=%s, isMP4=%s', 
+                $params['format'],
+                $extension,
+                $isMP4 ? 'true' : 'false'
+            ));
+
+            if ($isMP4) {
                 $this->convertToMp4(
                     $inputFile,
                     $outputFile,
@@ -98,7 +103,17 @@ class rex_effect_video_to_preview extends rex_effect_abstract
             $this->media->setSourcePath($outputFile);
             $this->media->refreshImageDimensions();
             $this->media->setFormat($extension);
-            $this->media->setHeader('Content-Type', 'image/' . $extension);
+            
+            // Setze korrekten Content-Type basierend auf Format
+            $contentType = $isMP4 ? 'video/mp4' : 'image/webp';
+            $this->media->setHeader('Content-Type', $contentType);
+            
+            // Debug logging für Output
+            rex_logger::factory()->log('media_manager', sprintf(
+                'Output Details: extension=%s, contentType=%s', 
+                $extension,
+                $contentType
+            ));
             
             register_shutdown_function(static function() use ($outputFile) {
                 rex_file::delete($outputFile);
@@ -112,11 +127,6 @@ class rex_effect_video_to_preview extends rex_effect_abstract
 
     private function validateAndGetParams(): array
     {
-        rex_logger::factory()->log('media_manager', sprintf(
-            'Raw Params Debug: position=%s', 
-            $this->params['position'] ?? 'nicht gesetzt'
-        ));
-
         return [
             'width' => max(1, intval($this->params['width'] ?? 400)),
             'fps' => max(1, min(30, intval($this->params['fps'] ?? 12))),
@@ -124,7 +134,7 @@ class rex_effect_video_to_preview extends rex_effect_abstract
             'snippetLength' => min(floatval($this->params['snippet_length'] ?? 2), self::MAX_DURATION),
             'compression' => max(1, min(5, intval($this->params['compression_level'] ?? 3))),
             'position' => $this->normalizePosition($this->params['position'] ?? 'middle'),
-            'format' => $this->params['output_format'] ?? 'webp'
+            'format' => trim(strtolower($this->params['output_format'] ?? 'webp'))
         ];
     }
 
@@ -147,13 +157,6 @@ class rex_effect_video_to_preview extends rex_effect_abstract
     private function calculateStartPosition(float $duration, float $snippetLength, string $position): float
     {
         $snippetLength = min($snippetLength, $duration);
-        
-        rex_logger::factory()->log('media_manager', sprintf(
-            'Position Debug: position=%s, duration=%f, snippetLength=%f', 
-            $position,
-            $duration,
-            $snippetLength
-        ));
 
         switch ($position) {
             case 'start':
@@ -209,7 +212,7 @@ class rex_effect_video_to_preview extends rex_effect_abstract
         $filters[] = sprintf('fps=%d', $fps);
         $filters[] = 'crop=trunc(iw/2)*2:trunc(ih/2)*2';
 
-        $crf = min(28, 18 + ($compression * 2));
+        $crf = min(28, 18 + ($compression * 2)); // CRF 18-28 based on compression level
 
         $cmd = sprintf(
             'ffmpeg -y ' .
@@ -233,6 +236,12 @@ class rex_effect_video_to_preview extends rex_effect_abstract
         );
 
         $this->executeCommand($cmd);
+        
+        // Debug logging für MP4 Konvertierung
+        rex_logger::factory()->log('media_manager', sprintf(
+            'MP4 Konvertierung: cmd=%s', 
+            $cmd
+        ));
     }
 
     private function convertToWebp($input, $output, $start, $length, $width, $fps, $quality, $compression)
@@ -282,6 +291,12 @@ class rex_effect_video_to_preview extends rex_effect_abstract
         );
 
         $this->executeCommand($cmd);
+        
+        // Debug logging für WebP Konvertierung
+        rex_logger::factory()->log('media_manager', sprintf(
+            'WebP Konvertierung: cmd=%s', 
+            $cmd
+        ));
     }
 
     private function executeCommand($cmd)
@@ -293,6 +308,13 @@ class rex_effect_video_to_preview extends rex_effect_abstract
                 'Befehl fehlgeschlagen: ' . $cmd . "\n" . implode("\n", $output)
             );
         }
+        
+        // Debug logging für Kommando Ausführung
+        rex_logger::factory()->log('media_manager', sprintf(
+            'Kommando Ausführung: returnCode=%d, output=%s', 
+            $returnCode,
+            implode("\n", $output)
+        ));
     }
 
     private function getVideoDuration($inputFile): float
