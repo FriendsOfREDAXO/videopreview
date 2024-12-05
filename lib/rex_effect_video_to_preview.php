@@ -1,5 +1,10 @@
 <?php
 
+/**
+ * REDAXO Media Manager Effekt
+ * Konvertiert Videos in animierte WebP oder MP4 Vorschauen 
+ * mit optimierter Textdarstellung und korrekter Positionierung
+ */
 class rex_effect_video_to_preview extends rex_effect_abstract
 {
     private const COMPRESSION_LEVELS = [
@@ -123,6 +128,69 @@ class rex_effect_video_to_preview extends rex_effect_abstract
         ];
     }
 
+    private function normalizePosition(string $position): string
+    {
+        switch ($position) {
+            case 'Anfang (nach 2 Sekunden)':
+            case 'start':
+                return 'start';
+            case '10 Sekunden vor Ende':
+            case 'end':
+                return 'end';
+            case 'Mitte des Videos':
+            case 'middle':
+            default:
+                return 'middle';
+        }
+    }
+
+    private function calculateStartPosition(float $duration, float $snippetLength, string $position): float
+    {
+        $snippetLength = min($snippetLength, $duration);
+        
+        rex_logger::factory()->log('media_manager', sprintf(
+            'Position Debug: position=%s, duration=%f, snippetLength=%f', 
+            $position,
+            $duration,
+            $snippetLength
+        ));
+
+        switch ($position) {
+            case 'start':
+                if ($duration > (self::START_OFFSET + $snippetLength)) {
+                    return self::START_OFFSET;
+                }
+                return 0.0;
+
+            case 'end':
+                if ($duration <= (self::END_OFFSET + $snippetLength)) {
+                    return max(0.0, $duration - $snippetLength);
+                }
+                return max(0.0, $duration - self::END_OFFSET - $snippetLength);
+
+            case 'middle':
+            default:
+                $middlePoint = $duration / 2;
+                return max(0.0, min(
+                    $middlePoint - ($snippetLength / 2),
+                    $duration - $snippetLength
+                ));
+        }
+    }
+
+    private function getQualityForCompression(int $compression): int 
+    {
+        $qualityMap = [
+            1 => 95, // Minimal
+            2 => 85, // Niedrig
+            3 => 75, // Standard
+            4 => 65, // Hoch
+            5 => 55  // Maximal
+        ];
+        
+        return $qualityMap[$compression] ?? 75;
+    }
+
     private function convertToMp4($input, $output, $start, $length, $width, $fps, $quality, $compression)
     {
         $filters = [];
@@ -141,7 +209,7 @@ class rex_effect_video_to_preview extends rex_effect_abstract
         $filters[] = sprintf('fps=%d', $fps);
         $filters[] = 'crop=trunc(iw/2)*2:trunc(ih/2)*2';
 
-        $crf = min(28, 18 + ($compression * 2)); // CRF 18-28 based on compression level
+        $crf = min(28, 18 + ($compression * 2));
 
         $cmd = sprintf(
             'ffmpeg -y ' .
@@ -167,9 +235,102 @@ class rex_effect_video_to_preview extends rex_effect_abstract
         $this->executeCommand($cmd);
     }
 
-    // [Previous methods remain unchanged: normalizePosition, calculateStartPosition, 
-    // getQualityForCompression, convertToWebp, executeCommand, getVideoDuration, 
-    // isVideoFile, isFfmpegAvailable]
+    private function convertToWebp($input, $output, $start, $length, $width, $fps, $quality, $compression)
+    {
+        $filters = [];
+        
+        if ($compression > 3) {
+            $filters[] = 'unsharp=3:3:0.3:3:3:0.1';
+        }
+        
+        $filters[] = sprintf('scale=%d:-1:flags=lanczos+accurate_rnd', $width);
+        $filters[] = 'eq=contrast=1.1';
+        
+        if ($compression <= 3) {
+            $filters[] = 'unsharp=5:5:1.0:5:5:0.0';
+        }
+        
+        $filters[] = sprintf('fps=%d', $fps);
+        $filters[] = 'crop=trunc(iw/2)*2:trunc(ih/2)*2';
+
+        $cmd = sprintf(
+            'ffmpeg -y ' .
+            '-ss %f -t %f '.
+            '-i %s '.
+            '-vf "%s" '.
+            '-vcodec libwebp '.
+            '-preset picture '.
+            '-compression_level %d '. 
+            '-lossless 0 '.
+            '-quality %d '.
+            '-loop 0 '.
+            '-vsync 0 '.
+            '-qmin %d '.
+            '-qmax %d '.
+            '-metadata author="" '.
+            '-an -threads 4 '.
+            '%s 2>&1',
+            $start,
+            $length,
+            escapeshellarg($input),
+            implode(',', $filters),
+            min(4, $compression),
+            $quality,
+            max(1, $compression),
+            min(20, $compression * 4),
+            escapeshellarg($output)
+        );
+
+        $this->executeCommand($cmd);
+    }
+
+    private function executeCommand($cmd)
+    {
+        exec($cmd, $output, $returnCode);
+        
+        if ($returnCode !== 0) {
+            throw new rex_exception(
+                'Befehl fehlgeschlagen: ' . $cmd . "\n" . implode("\n", $output)
+            );
+        }
+    }
+
+    private function getVideoDuration($inputFile): float
+    {
+        $cmd = sprintf(
+            'ffprobe -v error -select_streams v:0 '.
+            '-show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 %s',
+            escapeshellarg($inputFile)
+        );
+        
+        exec($cmd, $output, $returnCode);
+        
+        if ($returnCode !== 0 || empty($output)) {
+            return 0.0;
+        }
+        
+        return (float) $output[0];
+    }
+
+    private function isVideoFile($file): bool
+    {
+        if (!file_exists($file)) {
+            return false;
+        }
+
+        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        return in_array($ext, self::VIDEO_TYPES);
+    }
+
+    private function isFfmpegAvailable(): bool
+    {
+        if (!function_exists('exec')) {
+            return false;
+        }
+        
+        exec('ffmpeg -version', $output, $returnCode);
+        return $returnCode === 0;
+    }
 
     public function getName()
     {
