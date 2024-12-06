@@ -150,7 +150,3 @@ MIT-Lizenz
 
 [Thomas Skerbis](https://github.com/skerbis)
 
-# REDAXO VideoPreview
-
-AddOn generates animated webp or mp4 video without sound previews. 
-Extends the media manager 
