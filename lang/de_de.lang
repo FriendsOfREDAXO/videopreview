@@ -1,0 +1,31 @@
+videopreview_to_preview = Video Vorschau (MP4, ohne Ton)
+videopreview_to_webp = Video Vorschau (WebP)
+
+videopreview_error_ffmpeg = FFmpeg wurde nicht gefunden. Dieser Effekt wird nicht funktionieren.
+videopreview_error_duration = Videolänge konnte nicht ermittelt werden
+videopreview_error_output = Ausgabedatei ist leer oder existiert nicht
+videopreview_error_command = Befehl fehlgeschlagen
+
+videopreview_compression_minimal = Minimal (große Datei, beste Qualität)
+videopreview_compression_low = Niedrig (bessere Qualität)
+videopreview_compression_standard = Standard (ausgewogen)
+videopreview_compression_high = Hoch (kleine Datei)
+videopreview_compression_maximum = Maximal (kleinste Datei)
+
+videopreview_position_label = Position im Video
+videopreview_position_notice = Wähle die Stelle im Video, von der der Ausschnitt erstellt werden soll
+videopreview_position_end = 10 Sekunden vor Ende
+videopreview_position_middle = Mitte des Videos
+videopreview_position_start = Anfang (nach 2 Sekunden)
+
+videopreview_width_label = Ausgabebreite
+videopreview_width_notice = Empfohlen: 400-800px für bessere Textdarstellung
+
+videopreview_compression_label = Kompressionsstufe
+videopreview_compression_notice = Niedrigere Kompression für bessere Textqualität wählen
+
+videopreview_fps_label = FPS
+videopreview_fps_notice = Empfohlen: 12-15 FPS für bessere Textlesbarkeit
+
+videopreview_length_label = Snippet-Länge (Sekunden)
+videopreview_length_notice = Maximal {0} Sekunden. Empfohlen: 2-3 Sekunden
