@@ -28,4 +28,4 @@ videopreview_fps_label = FPS
 videopreview_fps_notice = Empfohlen: 12-15 FPS für bessere Textlesbarkeit
 
 videopreview_length_label = Snippet-Länge (Sekunden)
-videopreview_length_notice = Maximal {0} Sekunden. Empfohlen: 2-3 Sekunden
+videopreview_length_notice = Maximal %d Sekunden. Empfohlen: 2-3 Sekunden
