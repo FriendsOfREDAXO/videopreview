@@ -1,6 +1,7 @@
 # REDAXO VideoPreview
 
-AddOn generates animated webp or mp4 video without sound previews 
+AddOn generates animated webp or mp4 video without sound previews. 
+Extends the media manager 
 
 ## Author
 
