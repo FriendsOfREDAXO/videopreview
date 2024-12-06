@@ -315,7 +315,7 @@ class rex_effect_video_to_preview extends rex_effect_abstract
                 'name' => 'snippet_length',
                 'type' => 'int',
                 'default' => '2',
-                'notice' => rex_i18n::msg('videopreview_length_notice', [self::MAX_DURATION])
+                'notice' => rex_i18n::msg('videopreview_length_notice', self::MAX_DURATION)
             ]
         ];
     }
