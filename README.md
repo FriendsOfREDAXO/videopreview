@@ -1,7 +1,5 @@
 # REDAXO VideoPreview
 
-## Work in progress / experimental state
-
 AddOn generates animated webp or mp4 video without sound previews 
 
 ## Author
