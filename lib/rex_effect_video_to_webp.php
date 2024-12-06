@@ -1,24 +1,24 @@
 <?php
 
 /**
- * REDAXO Media Manager Effekt
- * Konvertiert Videos in animierte WebP Vorschauen 
- * mit optimierter Textdarstellung und korrekter Positionierung
+ * REDAXO Media Manager Effect
+ * Converts videos to animated WebP previews with optimized text display
+ * and correct positioning
  */
 class rex_effect_video_to_webp extends rex_effect_abstract
 {
     private const COMPRESSION_LEVELS = [
-        1 => 'Minimal (große Datei, beste Qualität)',
-        2 => 'Niedrig (bessere Qualität)',
-        3 => 'Standard (ausgewogen)',
-        4 => 'Hoch (kleine Datei)',
-        5 => 'Maximal (kleinste Datei)'
+        1 => 'videopreview_compression_minimal',
+        2 => 'videopreview_compression_low',
+        3 => 'videopreview_compression_standard',
+        4 => 'videopreview_compression_high',
+        5 => 'videopreview_compression_maximum'
     ];
 
     private const MAX_DURATION = 10;
     private const VIDEO_TYPES = ['mp4', 'm4v', 'avi', 'mov', 'webm'];
-    private const START_OFFSET = 2;     // Sekunden nach Start
-    private const END_OFFSET = 10;      // Sekunden vor Ende
+    private const START_OFFSET = 2;     // Seconds after start
+    private const END_OFFSET = 10;      // Seconds before end
 
     public function execute()
     {
@@ -30,27 +30,24 @@ class rex_effect_video_to_webp extends rex_effect_abstract
             }
 
             if (!$this->isFfmpegAvailable()) {
-                throw new rex_exception('FFmpeg ist nicht verfügbar');
+                throw new rex_exception(rex_i18n::msg('videopreview_error_ffmpeg'));
             }
 
-            // Parameter auslesen und validieren
             $params = $this->validateAndGetParams();
             
-            // Videolänge ermitteln
             $duration = $this->getVideoDuration($inputFile);
             if ($duration <= 0) {
-                throw new rex_exception('Videolänge konnte nicht ermittelt werden');
+                throw new rex_exception(rex_i18n::msg('videopreview_error_duration'));
             }
             
             // Position Debug Logging
             rex_logger::factory()->log('media_manager', sprintf(
-                'Video Info: Länge=%f, Position=%s, SnippetLänge=%f', 
+                'Video Info: Length=%f, Position=%s, SnippetLength=%f', 
                 $duration, 
                 $params['position'], 
                 $params['snippetLength']
             ));
             
-            // Startposition berechnen
             $startPosition = $this->calculateStartPosition(
                 $duration,
                 $params['snippetLength'],
@@ -59,37 +56,33 @@ class rex_effect_video_to_webp extends rex_effect_abstract
             
             // Position Debug Logging
             rex_logger::factory()->log('media_manager', sprintf(
-                'Berechnete Startposition: %f Sekunden', 
+                'Calculated start position: %f seconds', 
                 $startPosition
             ));
             
-            // Temporäre Ausgabedatei
             $outputFile = rex_path::addonCache('media_manager', 
                 'media_manager__video2webp_' . md5($inputFile) . '.webp');
 
-            // Verbesserte Konvertierung
             $this->convertToWebp(
-                $inputFile, 
-                $outputFile, 
-                $startPosition, 
-                $params['snippetLength'], 
-                $params['width'], 
-                $params['fps'], 
-                $params['quality'], 
+                $inputFile,
+                $outputFile,
+                $startPosition,
+                $params['snippetLength'],
+                $params['width'],
+                $params['fps'],
+                $params['quality'],
                 $params['compression']
             );
 
             if (!file_exists($outputFile) || filesize($outputFile) === 0) {
-                throw new rex_exception('Ausgabedatei ist leer oder existiert nicht');
+                throw new rex_exception(rex_i18n::msg('videopreview_error_output'));
             }
 
-            // In Media Objekt übernehmen
             $this->media->setSourcePath($outputFile);
             $this->media->refreshImageDimensions();
             $this->media->setFormat('webp');
             $this->media->setHeader('Content-Type', 'image/webp');
             
-            // Aufräumen
             register_shutdown_function(static function() use ($outputFile) {
                 rex_file::delete($outputFile);
             });
@@ -102,10 +95,10 @@ class rex_effect_video_to_webp extends rex_effect_abstract
 
     private function validateAndGetParams(): array
     {
-        // Debug der Rohwerte
+        // Debug raw values
         rex_logger::factory()->log('media_manager', sprintf(
             'Raw Params Debug: position=%s', 
-            $this->params['position'] ?? 'nicht gesetzt'
+            $this->params['position'] ?? 'not set'
         ));
 
         return [
@@ -118,17 +111,29 @@ class rex_effect_video_to_webp extends rex_effect_abstract
         ];
     }
 
+    private function getQualityForCompression(int $compression): int 
+    {
+        $qualityMap = [
+            1 => 95, // Minimal
+            2 => 85, // Niedrig
+            3 => 75, // Standard
+            4 => 65, // Hoch
+            5 => 55  // Maximal
+        ];
+        
+        return $qualityMap[$compression] ?? 75;
+    }
+
     private function normalizePosition(string $position): string
     {
-        // Normalisiere die Position basierend auf dem ausgewählten Wert
         switch ($position) {
-            case 'Anfang (nach 2 Sekunden)':
+            case rex_i18n::msg('videopreview_position_start'):
             case 'start':
                 return 'start';
-            case '10 Sekunden vor Ende':
+            case rex_i18n::msg('videopreview_position_end'):
             case 'end':
                 return 'end';
-            case 'Mitte des Videos':
+            case rex_i18n::msg('videopreview_position_middle'):
             case 'middle':
             default:
                 return 'middle';
@@ -137,7 +142,7 @@ class rex_effect_video_to_webp extends rex_effect_abstract
 
     private function calculateStartPosition(float $duration, float $snippetLength, string $position): float
     {
-        // Sicherstellen, dass die Snippet-Länge nicht die Videolänge überschreitet
+        // Ensure snippet length doesn't exceed video duration
         $snippetLength = min($snippetLength, $duration);
         
         // Position Debug Logging
@@ -171,41 +176,28 @@ class rex_effect_video_to_webp extends rex_effect_abstract
         }
     }
 
-    private function getQualityForCompression(int $compression): int 
-    {
-        $qualityMap = [
-            1 => 95, // Minimal
-            2 => 85, // Niedrig
-            3 => 75, // Standard
-            4 => 65, // Hoch
-            5 => 55  // Maximal
-        ];
-        
-        return $qualityMap[$compression] ?? 75;
-    }
-
     private function convertToWebp($input, $output, $start, $length, $width, $fps, $quality, $compression)
     {
-        // Optimierte Filterkette für Textdarstellung
+        // Optimized filter chain for text display
         $filters = [];
         
-        // Unschärfefilter für Rauschreduzierung
+        // Unsharp mask for noise reduction
         if ($compression > 3) {
             $filters[] = 'unsharp=3:3:0.3:3:3:0.1';
         }
         
-        // Basis-Skalierung mit hoher Qualität
+        // Base scaling with high quality
         $filters[] = sprintf('scale=%d:-1:flags=lanczos+accurate_rnd', $width);
         
-        // Textoptimierung durch leichte Schärfung
+        // Text optimization through slight sharpening
         $filters[] = 'eq=contrast=1.1';
         
         if ($compression <= 3) {
-            // Zusätzliche Schärfung für Text bei niedrigerer Kompression
+            // Additional sharpening for text at lower compression
             $filters[] = 'unsharp=5:5:1.0:5:5:0.0';
         }
         
-        // FPS und Crop
+        // FPS and crop
         $filters[] = sprintf('fps=%d', $fps);
         $filters[] = 'crop=trunc(iw/2)*2:trunc(ih/2)*2';
 
@@ -245,9 +237,11 @@ class rex_effect_video_to_webp extends rex_effect_abstract
         exec($cmd, $output, $returnCode);
         
         if ($returnCode !== 0) {
-            throw new rex_exception(
-                'Befehl fehlgeschlagen: ' . $cmd . "\n" . implode("\n", $output)
-            );
+            throw new rex_exception(sprintf(
+                '%s: %s', 
+                rex_i18n::msg('videopreview_error_command'),
+                $cmd . "\n" . implode("\n", $output)
+            ));
         }
     }
 
@@ -290,58 +284,60 @@ class rex_effect_video_to_webp extends rex_effect_abstract
 
     public function getName()
     {
-        return 'Video Vorschau (WebP)';
+        return rex_i18n::msg('videopreview_to_webp');
     }
 
     public function getParams()
     {
         $notice = '';
         if (!$this->isFfmpegAvailable()) {
-            $notice = '<strong>FFmpeg wurde nicht gefunden. Dieser Effekt wird nicht funktionieren.</strong><br>';
+            $notice = '<strong>' . rex_i18n::msg('videopreview_error_ffmpeg') . '</strong><br>';
         }
 
         return [
             [
-                'label' => 'Position im Video',
+                'label' => rex_i18n::msg('videopreview_position_label'),
                 'name' => 'position',
                 'type' => 'select',
                 'options' => [
-                    'end' => '10 Sekunden vor Ende',
-                    'middle' => 'Mitte des Videos',
-                    'start' => 'Anfang (nach 2 Sekunden)'
+                    'end' => rex_i18n::msg('videopreview_position_end'),
+                    'middle' => rex_i18n::msg('videopreview_position_middle'),
+                    'start' => rex_i18n::msg('videopreview_position_start')
                 ],
                 'default' => 'middle',
-                'notice' => 'Wähle die Stelle im Video, von der der Ausschnitt erstellt werden soll',
+                'notice' => rex_i18n::msg('videopreview_position_notice'),
                 'prefix' => $notice
             ],
             [
-                'label' => 'Ausgabebreite',
+                'label' => rex_i18n::msg('videopreview_width_label'),
                 'name' => 'width',
                 'type' => 'int',
                 'default' => '400',
-                'notice' => 'Empfohlen: 400-800px für bessere Textdarstellung'
+                'notice' => rex_i18n::msg('videopreview_width_notice')
             ],
             [
-                'label' => 'Kompressionsstufe',
+                'label' => rex_i18n::msg('videopreview_compression_label'),
                 'name' => 'compression_level',
                 'type' => 'select',
-                'options' => self::COMPRESSION_LEVELS,
+                'options' => array_map(function($key) {
+                    return rex_i18n::msg($key);
+                }, self::COMPRESSION_LEVELS),
                 'default' => '3',
-                'notice' => 'Niedrigere Kompression für bessere Textqualität wählen'
+                'notice' => rex_i18n::msg('videopreview_compression_notice')
             ],
             [
-                'label' => 'FPS',
+                'label' => rex_i18n::msg('videopreview_fps_label'),
                 'name' => 'fps',
                 'type' => 'int',
                 'default' => '12',
-                'notice' => 'Empfohlen: 12-15 FPS für bessere Textlesbarkeit'
+                'notice' => rex_i18n::msg('videopreview_fps_notice')
             ],
             [
-                'label' => 'Snippet-Länge (Sekunden)',
+                'label' => rex_i18n::msg('videopreview_length_label'),
                 'name' => 'snippet_length',
                 'type' => 'int',
                 'default' => '2',
-                'notice' => sprintf('Maximal %d Sekunden. Empfohlen: 2-3 Sekunden', self::MAX_DURATION)
+                'notice' => rex_i18n::msg('videopreview_length_notice', self::MAX_DURATION)
             ]
         ];
     }

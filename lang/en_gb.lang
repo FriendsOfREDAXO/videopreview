@@ -1,0 +1,31 @@
+videopreview_to_preview = Video Preview (MP4, no sound)
+videopreview_to_webp = Video Preview (WebP)
+
+videopreview_error_ffmpeg = FFmpeg not found. This effect will not work.
+videopreview_error_duration = Could not determine video duration
+videopreview_error_output = Output file is empty or does not exist
+videopreview_error_command = Command failed
+
+videopreview_compression_minimal = Minimal (large file, best quality)
+videopreview_compression_low = Low (better quality)
+videopreview_compression_standard = Standard (balanced)
+videopreview_compression_high = High (small file)
+videopreview_compression_maximum = Maximum (smallest file)
+
+videopreview_position_label = Position in video
+videopreview_position_notice = Choose the position in the video from where the snippet should be created
+videopreview_position_end = 10 seconds before end
+videopreview_position_middle = Middle of video
+videopreview_position_start = Start (after 2 seconds)
+
+videopreview_width_label = Output width
+videopreview_width_notice = Recommended: 400-800px for better text display
+
+videopreview_compression_label = Compression level
+videopreview_compression_notice = Choose lower compression for better text quality
+
+videopreview_fps_label = FPS
+videopreview_fps_notice = Recommended: 12-15 FPS for better text readability
+
+videopreview_length_label = Snippet length (seconds)
+videopreview_length_notice = Maximum %d seconds. Recommended: 2-3 seconds
