@@ -13,8 +13,8 @@ Dieses AddOn erweitert den REDAXO Media Manager um zwei neue Effekte zur automat
 
 ## 🔧 Systemvoraussetzungen
 
-- REDAXO 5.12 oder höher
-- PHP 7.4 oder höher
+- REDAXO 5.17 oder höher
+- PHP 8.1 oder höher
 - FFmpeg auf dem Server
 - Ausreichend Arbeitsspeicher für Videoverarbeitung
 
