@@ -2,8 +2,8 @@
 
 /**
  * REDAXO Media Manager Effect
- * Converts videos to animated WebP previews with optimized text display
- * and correct positioning
+ * Converts videos to animated WebP previews with optimized performance
+ * and browser-specific handling
  */
 class rex_effect_video_to_webp extends rex_effect_abstract
 {
@@ -19,13 +19,25 @@ class rex_effect_video_to_webp extends rex_effect_abstract
     private const VIDEO_TYPES = ['mp4', 'm4v', 'avi', 'mov', 'webm'];
     private const START_OFFSET = 2;     // Seconds after start
     private const END_OFFSET = 10;      // Seconds before end
-
+    private const CACHE_DURATION = 86400; // 24 hours cache
+    
     public function execute()
     {
         try {
             $inputFile = rex_type::notNull($this->media->getMediaPath());
             
             if (!$this->isVideoFile($inputFile)) {
+                return;
+            }
+
+            // Generate cache key based on input file and parameters
+            $cacheKey = md5($inputFile . serialize($this->params));
+            $outputFile = rex_path::addonCache('media_manager', 
+                'media_manager__video2webp_' . $cacheKey . '.webp');
+
+            // Check if cached version exists and is valid
+            if ($this->isValidCache($outputFile)) {
+                $this->setMediaFromCache($outputFile);
                 return;
             }
 
@@ -40,52 +52,22 @@ class rex_effect_video_to_webp extends rex_effect_abstract
                 throw new rex_exception(rex_i18n::msg('videopreview_error_duration'));
             }
             
-            // Position Debug Logging
-            rex_logger::factory()->log('media_manager', sprintf(
-                'Video Info: Length=%f, Position=%s, SnippetLength=%f', 
-                $duration, 
-                $params['position'], 
-                $params['snippetLength']
-            ));
-            
             $startPosition = $this->calculateStartPosition(
                 $duration,
                 $params['snippetLength'],
                 $params['position']
             );
             
-            // Position Debug Logging
-            rex_logger::factory()->log('media_manager', sprintf(
-                'Calculated start position: %f seconds', 
-                $startPosition
-            ));
-            
-            $outputFile = rex_path::addonCache('media_manager', 
-                'media_manager__video2webp_' . md5($inputFile) . '.webp');
-
-            $this->convertToWebp(
-                $inputFile,
-                $outputFile,
-                $startPosition,
-                $params['snippetLength'],
-                $params['width'],
-                $params['fps'],
-                $params['quality'],
-                $params['compression']
-            );
+            // Generate new preview
+            $this->generatePreview($inputFile, $outputFile, array_merge($params, [
+                'startPosition' => $startPosition
+            ]));
 
             if (!file_exists($outputFile) || filesize($outputFile) === 0) {
                 throw new rex_exception(rex_i18n::msg('videopreview_error_output'));
             }
 
-            $this->media->setSourcePath($outputFile);
-            $this->media->refreshImageDimensions();
-            $this->media->setFormat('webp');
-            $this->media->setHeader('Content-Type', 'image/webp');
-            
-            register_shutdown_function(static function() use ($outputFile) {
-                rex_file::delete($outputFile);
-            });
+            $this->setMediaFromCache($outputFile);
 
         } catch (rex_exception $e) {
             rex_logger::factory()->logException($e);
@@ -95,12 +77,6 @@ class rex_effect_video_to_webp extends rex_effect_abstract
 
     private function validateAndGetParams(): array
     {
-        // Debug raw values
-        rex_logger::factory()->log('media_manager', sprintf(
-            'Raw Params Debug: position=%s', 
-            $this->params['position'] ?? 'not set'
-        ));
-
         return [
             'width' => max(1, intval($this->params['width'] ?? 400)),
             'fps' => max(1, min(30, intval($this->params['fps'] ?? 12))),
@@ -115,13 +91,20 @@ class rex_effect_video_to_webp extends rex_effect_abstract
     {
         $qualityMap = [
             1 => 95, // Minimal
-            2 => 85, // Niedrig
+            2 => 85, // Low
             3 => 75, // Standard
-            4 => 65, // Hoch
-            5 => 55  // Maximal
+            4 => 65, // High
+            5 => 55  // Maximum
         ];
         
-        return $qualityMap[$compression] ?? 75;
+        $quality = $qualityMap[$compression] ?? 75;
+        
+        // Reduce quality for Safari to improve performance
+        if ($this->isSafari()) {
+            $quality = max(1, $quality - 10);
+        }
+        
+        return $quality;
     }
 
     private function normalizePosition(string $position): string
@@ -142,16 +125,7 @@ class rex_effect_video_to_webp extends rex_effect_abstract
 
     private function calculateStartPosition(float $duration, float $snippetLength, string $position): float
     {
-        // Ensure snippet length doesn't exceed video duration
         $snippetLength = min($snippetLength, $duration);
-        
-        // Position Debug Logging
-        rex_logger::factory()->log('media_manager', sprintf(
-            'Position Debug: position=%s, duration=%f, snippetLength=%f', 
-            $position,
-            $duration,
-            $snippetLength
-        ));
 
         switch ($position) {
             case 'start':
@@ -176,30 +150,10 @@ class rex_effect_video_to_webp extends rex_effect_abstract
         }
     }
 
-    private function convertToWebp($input, $output, $start, $length, $width, $fps, $quality, $compression)
+    private function generatePreview($inputFile, $outputFile, array $params)
     {
-        // Optimized filter chain for text display
-        $filters = [];
-        
-        // Unsharp mask for noise reduction
-        if ($compression > 3) {
-            $filters[] = 'unsharp=3:3:0.3:3:3:0.1';
-        }
-        
-        // Base scaling with high quality
-        $filters[] = sprintf('scale=%d:-1:flags=lanczos+accurate_rnd', $width);
-        
-        // Text optimization through slight sharpening
-        $filters[] = 'eq=contrast=1.1';
-        
-        if ($compression <= 3) {
-            // Additional sharpening for text at lower compression
-            $filters[] = 'unsharp=5:5:1.0:5:5:0.0';
-        }
-        
-        // FPS and crop
-        $filters[] = sprintf('fps=%d', $fps);
-        $filters[] = 'crop=trunc(iw/2)*2:trunc(ih/2)*2';
+        // Optimized filters based on browser and compression level
+        $filters = $this->getOptimizedFilters($params);
 
         $cmd = sprintf(
             'ffmpeg -y ' .
@@ -218,18 +172,66 @@ class rex_effect_video_to_webp extends rex_effect_abstract
             '-metadata author="" '.
             '-an -threads 4 '.
             '%s 2>&1',
-            $start,
-            $length,
-            escapeshellarg($input),
+            $params['startPosition'],
+            $params['snippetLength'],
+            escapeshellarg($inputFile),
             implode(',', $filters),
-            min(4, $compression),
-            $quality,
-            max(1, $compression),
-            min(20, $compression * 4),
-            escapeshellarg($output)
+            min(4, $params['compression']),
+            $params['quality'],
+            max(1, $params['compression']),
+            min(20, $params['compression'] * 4),
+            escapeshellarg($outputFile)
         );
 
         $this->executeCommand($cmd);
+    }
+
+    private function getOptimizedFilters(array $params): array
+    {
+        $filters = [];
+        
+        // Base scaling with appropriate quality
+        $filters[] = sprintf('scale=%d:-1:flags=lanczos', $params['width']);
+        
+        // Browser-specific optimizations
+        if ($this->isSafari()) {
+            // Simplified filter chain for Safari
+            $filters[] = 'eq=contrast=1.05';
+        } else {
+            // More complex filters for other browsers
+            if ($params['compression'] > 3) {
+                $filters[] = 'unsharp=3:3:0.3:3:3:0.1';
+            }
+            $filters[] = 'eq=contrast=1.1';
+            if ($params['compression'] <= 3) {
+                $filters[] = 'unsharp=5:5:1.0:5:5:0.0';
+            }
+        }
+        
+        // Common filters
+        $filters[] = sprintf('fps=%d', $params['fps']);
+        $filters[] = 'crop=trunc(iw/2)*2:trunc(ih/2)*2';
+        
+        return $filters;
+    }
+
+    private function isValidCache($outputFile): bool 
+    {
+        if (!file_exists($outputFile)) {
+            return false;
+        }
+
+        $fileAge = time() - filemtime($outputFile);
+        return $fileAge < self::CACHE_DURATION;
+    }
+
+    private function setMediaFromCache($outputFile)
+    {
+        $this->media->setSourcePath($outputFile);
+        $this->media->refreshImageDimensions();
+        $this->media->setFormat('webp');
+        $this->media->setHeader('Content-Type', 'image/webp');
+        $this->media->setHeader('Cache-Control', 'public, max-age=' . self::CACHE_DURATION);
     }
 
     private function executeCommand($cmd)
@@ -280,6 +282,13 @@ class rex_effect_video_to_webp extends rex_effect_abstract
         
         exec('ffmpeg -version', $output, $returnCode);
         return $returnCode === 0;
+    }
+
+    private function isSafari(): bool
+    {
+        $userAgent = rex_request::server('HTTP_USER_AGENT', 'string', '');
+        return stripos($userAgent, 'Safari') !== false 
+            && stripos($userAgent, 'Chrome') === false;
     }
 
     public function getName()
