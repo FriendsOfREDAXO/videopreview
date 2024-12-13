@@ -150,7 +150,7 @@ class rex_effect_video_to_webp extends rex_effect_abstract
         }
     }
 
-    private function generatePreview($inputFile, $outputFile, $params)
+    private function generatePreview($inputFile, $outputFile, array $params)
     {
         // Optimized filters based on browser and compression level
         $filters = $this->getOptimizedFilters($params);
