@@ -1,5 +1,8 @@
 # 🎥 VideoPreview für REDAXO
 
+> 👋 Dieses AddOn wurde eingestellt. Die Effekte wurden in das ffmpeg-AddOn übernommen
+
+
 Dieses AddOn erweitert den REDAXO Media Manager um zwei neue Effekte zur automatischen Generierung von Vorschauen aus Videos. Die Effekte eignen sich ideal für Medienpools, Galerien oder überall dort, wo ein schneller Einblick in Videoinhalte benötigt wird.
 
 ## 🎯 Features
